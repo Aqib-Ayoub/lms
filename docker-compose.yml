@@ -1,0 +1,93 @@
+version: '3.9'
+
+# ─────────────────────────────────────────────────────────────
+#  LearnHub LMS — DEVELOPMENT
+#  Hot-reload: frontend (Vite) + backend (Nodemon) + MongoDB
+#
+#  Usage:
+#    docker compose up --build
+#
+#  Prerequisites:
+#    - Copy backend/.env.example → backend/.env and fill in values
+#    - MONGO_URI is handled automatically (see below)
+# ─────────────────────────────────────────────────────────────
+
+services:
+  # ── MongoDB ───────────────────────────────────────────────
+  mongo:
+    image: mongo:7-jammy
+    container_name: lms-mongo
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - lms-network
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── Backend (Node + Nodemon) ───────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: lms-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      # Override MONGO_URI so it points to the Docker service, not localhost
+      MONGO_URI: mongodb://mongo:27017/lms
+      PORT: 5000
+      # Allow both host-machine browser and nginx container origins
+      ALLOWED_ORIGINS: 'http://localhost:5173,http://localhost:3000'
+    ports:
+      - '5000:5000'
+    volumes:
+      # Mount source code for hot-reload
+      - ./backend:/app
+      # Preserve container's node_modules (don't overwrite with host)
+      - backend-node-modules:/app/node_modules
+      # Persist uploaded files on the host
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - lms-network
+
+  # ── Frontend (Vite Dev Server) ─────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: lms-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: 'http://localhost:5000/api'
+      VITE_UPLOADS_URL: 'http://localhost:5000'
+    ports:
+      - '5173:5173'
+    volumes:
+      # Mount source code for hot-reload
+      - ./frontend:/app
+      # Preserve container's node_modules (don't overwrite with host)
+      - frontend-node-modules:/app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - lms-network
+
+networks:
+  lms-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
+  backend-node-modules:
+  frontend-node-modules:

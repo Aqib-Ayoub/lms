@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log*
+
+# Don't copy uploads — it's mounted as a volume in dev
+# and a named volume in prod
+uploads
+
+# Environment files — never bake secrets into image
+.env
+.env.*
+!.env.example
+
+# Editor / OS artifacts
+.DS_Store
+*.swp
+*.swo

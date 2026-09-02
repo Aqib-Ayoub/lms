@@ -1,0 +1,23 @@
+# ──────────────────────────────────────────────
+#  Backend — Development Dockerfile
+#  Installs all dependencies (incl. devDeps like
+#  nodemon) for hot-reload during development.
+#  Source code is mounted as a volume by
+#  docker-compose.yml, so changes take effect
+#  immediately without rebuilding.
+# ──────────────────────────────────────────────
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install ALL deps (including nodemon)
+COPY package*.json ./
+RUN npm install
+
+# Ensure uploads directory exists
+RUN mkdir -p uploads
+
+EXPOSE 5000
+
+# Start with nodemon for hot-reload
+CMD ["npm", "run", "dev"]

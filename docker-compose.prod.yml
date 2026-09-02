@@ -1,0 +1,82 @@
+version: '3.9'
+
+# ─────────────────────────────────────────────────────────────
+#  LearnHub LMS — PRODUCTION
+#  Nginx serves the built React app and proxies /api → backend
+#  MongoDB data is persisted in a named volume
+#
+#  Usage:
+#    docker compose -f docker-compose.prod.yml up --build -d
+#
+#  Customise VITE_API_URL / VITE_UPLOADS_URL to match your
+#  domain (e.g. https://yourdomain.com/api)
+# ─────────────────────────────────────────────────────────────
+
+services:
+  # ── MongoDB ───────────────────────────────────────────────
+  mongo:
+    image: mongo:7-jammy
+    container_name: lms-mongo-prod
+    restart: always
+    # NOT exposed to the host — only accessible inside the Docker network
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - lms-network
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── Backend (Node — production) ────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lms-backend-prod
+    restart: always
+    env_file:
+      - ./backend/.env
+    environment:
+      MONGO_URI: mongodb://mongo:27017/lms
+      PORT: 5000
+      # In production, nginx proxies requests so the Origin is the public domain.
+      # Replace with your real domain(s), e.g.: https://yourdomain.com
+      ALLOWED_ORIGINS: 'http://localhost'
+    # NOT exposed to the host — only accessible to nginx inside the network
+    volumes:
+      - uploads-data:/app/uploads
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - lms-network
+
+  # ── Frontend (Nginx serving built React app) ───────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # /api is a relative path — Nginx proxies it to the backend service
+        VITE_API_URL: /api
+        VITE_UPLOADS_URL: ''
+    container_name: lms-frontend-prod
+    restart: always
+    ports:
+      - '80:80'     # HTTP
+      # - '443:443' # Uncomment when you add SSL/TLS
+    depends_on:
+      - backend
+    networks:
+      - lms-network
+
+networks:
+  lms-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
+  uploads-data:

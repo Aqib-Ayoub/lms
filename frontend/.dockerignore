@@ -1,0 +1,10 @@
+node_modules
+npm-debug.log*
+
+# Vite build output — not needed in build context
+dist
+
+# Editor / OS artifacts
+.DS_Store
+*.swp
+*.swo
